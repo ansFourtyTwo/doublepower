@@ -1,0 +1,90 @@
+{
+  "Ernst Maximilian": {
+    "rank": 1,
+    "LK": 7,
+    "strength": {
+      "left": 9,
+      "right": 8
+    }
+  },
+  "Fink Simon": {
+    "rank": 2,
+    "LK": 10,
+    "strength": {
+      "left": 7,
+      "right": 5
+    }
+  },
+  "Dess Jürgen": {
+    "rank": 3,
+    "LK": 12,
+    "strength": {
+      "left": 7,
+      "right": 8
+    }
+  },
+  "Kölbl Thomas": {
+    "rank": 4,
+    "LK": 12,
+    "strength": {
+      "left": 3,
+      "right": 6
+    }
+  },
+  "Muschweck Frank": {
+    "rank": 5,
+    "LK": 13,
+    "strength": {
+      "left": 9,
+      "right": 10
+    }
+  },
+  "Weber Ludwig": {
+    "rank": 6,
+    "LK": 13,
+    "strength": {
+      "left": 6,
+      "right": 7
+    }
+  },
+  "Lautenschlager Christian": {
+    "rank": 7,
+    "LK": 13,
+    "strength": {
+      "left": 6,
+      "right": 7
+    }
+  },
+  "Bolgar Istvan": {
+    "rank": 8,
+    "LK": 14,
+    "strength": {
+      "left": 6,
+      "right": 7
+    }
+  },
+  "Kölbl Michael": {
+    "rank": 9,
+    "LK": 15,
+    "strength": {
+      "left": 6,
+      "right": 6
+    }
+  },
+  "Schuster Karl-Heinz": {
+    "rank": 10,
+    "LK": 17,
+    "strength": {
+      "left": 5,
+      "right": 8
+    }
+  },
+  "Panzer Martin": {
+    "rank": 11,
+    "LK": 19,
+    "strength": {
+      "left": 4,
+      "right": 6
+    }
+  }
+}
