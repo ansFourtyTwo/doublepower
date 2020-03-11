@@ -27,11 +27,11 @@ def get_ranked_formation(formation):
     return [(name, rank) for name, rank in zip(formation, range(1, 7))]
 
 
-def get_all_paired_formations(formation):
+def get_paired_formations(formation):
     return list(all_pairs(formation))
 
 
-def get_all_ranked_paired_formations(paired_formation, formation):
+def get_ranked_paired_formations(paired_formation, formation):
     min_single_ranks = [min(get_rank(pair[0], formation), get_rank(pair[1], formation)) for pair in paired_formation]
     ranks = [get_double_rank(pair, formation) for pair in paired_formation]
     ranked_paired_formation = [pair for _, _, pair in sorted(zip(ranks, min_single_ranks, paired_formation))]
@@ -78,6 +78,16 @@ def get_double_rank(pair, formation):
     return pair[0][1] + pair[1][1]
 
 
+def get_double_strength(pair, players):
+    lr_strength = players[pair[0]]['strength']['left'] + players[pair[1]]['strength']['right']
+    rl_strength = players[pair[0]]['strength']['right'] + players[pair[1]]['strength']['left']
+    return lr_strength if lr_strength > rl_strength else rl_strength
+
+
+def get_formation_strength(rpf, players):
+    return sum([get_double_strength(pair, players) for pair in rpf])
+
+
 def sort_by_sum(pairs, positions):
     sums = [positions[p[0]] + positions[p[1]] for p in pairs]
     return [(p[0], p[1], s) for s, p in sorted(zip(sums, pairs))]
@@ -103,10 +113,32 @@ def print_ranked_formation(formation):
     print(210 * '-')
 
 
-def print_ranked_paired_formation(rpf, formation):
-    output_sums = [f'[{get_double_rank(pair, formation):>2}]' for pair in rpf]
-    output_pairs = [f'{pair[0]} + {pair[1]}' for pair in rpf]
-    print(f'{output_sums[0]:<6}{output_sums[1]:<6}{output_sums[2]:<6}{output_pairs[0]:<60}{output_pairs[1]:<60}{output_pairs[2]:<60}')
+def print_ranked_paired_formation(rpf, players, formation=None):
+    total_strength = get_formation_strength(rpf, players)
+    if formation is not None:
+        output = [
+            f'[{get_rank(pair[0], formation)}] + [{get_rank(pair[1], formation)}]'
+            f' = [{get_double_rank(pair,formation):>2}]'
+            f' [strength = {get_double_strength(pair, players)}]'
+            for pair in rpf
+        ]
+
+        print(f'{output[0]:<40}{output[1]:<40}{output[2]:<40}'
+              f'   [total strength = {total_strength}]'
+              )
+    else:
+        output = []
+        for pair in rpf:
+            double_strength_string = f' [strength = {get_double_strength(pair, players)}]'
+            output.append(f'{pair[0]:>25} + {pair[1]:<25}{double_strength_string:<20}')
+
+        print(f'{output[0]:<70} || {output[1]:<70} || {output[2]:<70}'
+              f'   [total strength = {total_strength}]'
+              )
+
+
+def filter_ranked_paired_formations(rpf, players):
+    pass
 
 
 def main():
@@ -116,7 +148,7 @@ def main():
     print_players('List of players:', players)
 
     # input_ranks = input('Please enter available players:\n')
-    input_ranks = "1 2 3 4 5 7 9"
+    input_ranks = "1 2 5 7 8 11"
     available_ranks = [int(p.strip()) for p in input_ranks.split()]
     available_players = {name: info for name, info in players.items() for rk in available_ranks if info['rank'] == rk}
 
@@ -135,17 +167,29 @@ def main():
         print_ranked_formation(formation)
 
         # List of paired formations out of formations of 6 players (all possible pairs)
-        paired_formations = get_all_paired_formations(formation)
+        paired_formations = get_paired_formations(formation)
+
+        # List of all ranked paired formations:
+        # This includes swapped positions due to same double ranks
         ranked_paired_formations = []
         for paired_formation in paired_formations:
-            ranked_paired_formations.extend(get_all_ranked_paired_formations(paired_formation, formation))
+            ranked_paired_formations.extend(get_ranked_paired_formations(paired_formation, formation))
 
         for ranked_paired_formation in ranked_paired_formations:
-            print_ranked_paired_formation(ranked_paired_formation, formation)
+            print_ranked_paired_formation(ranked_paired_formation, players, formation)
 
+        # Collect all ranked paired formations from all possible formations (more than 6 players available)
         all_ranked_paired_formations.extend(ranked_paired_formations)
 
-    test = 42
+    formation_strengths = [get_formation_strength(rpf, players) for rpf in all_ranked_paired_formations]
+    max_total_strength = max(formation_strengths)
+    max_total_strength_formations = [rpf for _, rpf in
+                                     sorted(zip(formation_strengths, all_ranked_paired_formations), reverse=True)]
+    print('\n\n')
+    print(f'Max. formation strength: {max_total_strength}')
+    for rpf in max_total_strength_formations[:min([len(max_total_strength_formations), 20])]:
+        print_ranked_paired_formation(rpf, players)
+
 
 
 if __name__ == '__main__':
