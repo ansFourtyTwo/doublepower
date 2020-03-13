@@ -2,198 +2,258 @@ import itertools
 import json
 
 
-def all_pairs(formation):
-    if len(formation) < 2:
-        yield []
-        return
-    if len(formation) % 2 == 1:
-        # Handle odd length list
-        for i in range(len(formation)):
-            for result in all_pairs(formation[:i] + formation[i + 1:]):
-                yield result
-    else:
-        p1 = formation[0]
-        for i in range(1, len(formation)):
-            pair = (p1, formation[i])
-            for rest in all_pairs(formation[1:i] + formation[i + 1:]):
-                yield [pair] + rest
+class DoublePower:
 
+    def __init__(self, player_info_file):
+        # Load players_info
+        with open(player_info_file, 'r', encoding='utf-8') as f:
+            self.players_info = json.load(f)
 
-def get_all_formations(available_players):
-    return list(itertools.combinations(available_players, 6))
+        # Query for available players_info
+        self.available_players = self.query_available_players()
 
+    def query_available_players(self):
+        valid_input = False
+        available_players = None
+        while not valid_input:
+            self.print_players('List of players_info:')
+            # input_ranks = input('\nPlease enter available players_info (Space separated rank numbers): ')
+            input_ranks = "1 2 3 4 5 6 7"
+            try:
+                available_ranks = sorted(list(set([int(p.strip()) for p in input_ranks.split()])))
+            except ValueError:
+                print('Invalid input! Please provide space separated numbers according to above given table!')
+                continue
 
-def get_ranked_formation(formation):
-    return [(name, rank) for name, rank in zip(formation, range(1, 7))]
+            # Generate list of available players_info
+            available_players = [name for name, info in self.players_info.items() for rk in available_ranks if
+                                 info['rank'] == rk]
 
+            # Validate for length of dictionary (At least 6 players_info required)
+            if len(available_players) < 6:
+                print('Not sufficient players_info selected! Please provide at least 6 players!')
+                continue
 
-def get_paired_formations(formation):
-    return list(all_pairs(formation))
+            valid_input = True
 
+        self.print_players('Available players:', available_players)
+        return available_players
 
-def get_ranked_paired_formations(paired_formation, formation):
-    min_single_ranks = [min(get_rank(pair[0], formation), get_rank(pair[1], formation)) for pair in paired_formation]
-    ranks = [get_double_rank(pair, formation) for pair in paired_formation]
-    ranked_paired_formation = [pair for _, _, pair in sorted(zip(ranks, min_single_ranks, paired_formation))]
-    ranks.sort()
+    ##########################################################################
+    # Formatted printing
+    ##########################################################################
 
-    if ranks[0] == ranks[1]:
-        if ranks[1] == ranks[2]:
-            formation_variations = [
-                [0, 1, 2],
-                [0, 2, 1],
-                [1, 0, 2],
-                [2, 0, 1]
-            ]
+    def print_players(self, header, player_names=None):
+        print()
+        print(header)
+        print(30 * '-')
+        # If a list of player names is provided only print players_info from that list
+        if player_names:
+            for name in player_names:
+                info = self.players_info[name]
+                print(f'{info["rank"]:>2}: {name}')
+
+        # Otherwise print all players_info
         else:
-            formation_variations = [
-                [0, 1, 2],
-                [1, 0, 2]
-            ]
-    else:
-        if ranks[1] == ranks[2]:
-            formation_variations = [
-                [0, 1, 2],
-                [0, 2, 1]
-            ]
+            for name, info in self.players_info.items():
+                print(f'{info["rank"]:>2}: {name}')
+
+    def print_ranked_paired_formation(self, ranked_paired_formation, form=None):
+        total_strength = self.get_ranked_paired_formation_strength(ranked_paired_formation)
+        if form is None:
+            output = []
+            for pair in ranked_paired_formation:
+                double_strength_string = f' [strength = {self.get_double_strength(pair)}]'
+                output.append(f'{pair[0]:>25} + {pair[1]:<25}{double_strength_string:<20}')
+
+            print(f'{output[0]:<70} || {output[1]:<70} || {output[2]:<70}'
+                  f'   [total strength = {total_strength}]'
+                  )
         else:
-            formation_variations = [
-                [0, 1, 2]
+            output = [
+                f'[{form.get_rank(pair[0])}] + [{form.get_rank(pair[1])}]'
+                f' = [{form.get_double_rank(pair):>2}]'
+                f' [strength = {self.get_double_strength(pair)}]'
+                for pair in ranked_paired_formation
             ]
-    ranked_paired_formations = []
-    for i, j, k in formation_variations:
-        ranked_paired_formations.append(
-            [ranked_paired_formation[i], ranked_paired_formation[j], ranked_paired_formation[k]]
-        )
-    return ranked_paired_formations
+
+            print(f'{output[0]:<40}{output[1]:<40}{output[2]:<40}'
+                  f'   [total strength = {total_strength}]'
+                  )
+
+    def print_formations_info(self):
+        all_fs = self.get_all_formations()
+        for f in all_fs:
+            print(f)
+            f_rpfs = f.get_all_ranked_paired_formations()
+            for rpf in f_rpfs:
+                self.print_ranked_paired_formation(rpf, f)
+
+    def print_strongest_formations(self, n):
+        strongest_rpfs = self.get_strongest_formations(n)
+        for rpf in strongest_rpfs:
+            self.print_ranked_paired_formation(rpf)
+
+    ##########################################################################
+    # Combinatorics
+    ##########################################################################
+
+    def get_all_formations(self):
+        formation_list = list(itertools.combinations(self.available_players, 6))
+        return [Formation(f) for f in formation_list]
+
+    def get_all_ranked_paired_formations(self):
+        formations = self.get_all_formations()
+        all_rpfs = []
+        for f in formations:
+            f_rpfs = f.get_all_ranked_paired_formations()
+            all_rpfs.extend(f_rpfs)
+        return all_rpfs
+
+    ##########################################################################
+    # Analysis functions
+    ##########################################################################
+
+    def get_double_strength(self, pair):
+        """
+
+        :param pair: A 2-tuple holding player names
+        :return: The maximum strength a double pair can achieve
+        """
+        lr_strength = self.players_info[pair[0]]['strength']['left'] + self.players_info[pair[1]]['strength']['right']
+        rl_strength = self.players_info[pair[0]]['strength']['right'] + self.players_info[pair[1]]['strength']['left']
+        return lr_strength if lr_strength > rl_strength else rl_strength
+
+    def get_ranked_paired_formation_strength(self, ranked_paired_formation):
+        return sum([self.get_double_strength(pair) for pair in ranked_paired_formation])
+
+    def get_max_formation_strength(self):
+        formation_strengths = [self.print_ranked_paired_formation(rpf) for rpf in
+                               self.get_all_ranked_paired_formations()]
+        return max(formation_strengths)
+
+    def get_strongest_formations(self, n):
+        all_rpfs = self.get_all_ranked_paired_formations()
+
+        # Display N entries or all available entries
+        n = min([n, len(all_rpfs)])
+
+        rpfs_strengths = [self.get_ranked_paired_formation_strength(rpf) for rpf in all_rpfs]
+        strength_sorted_rpfs = [rpf for _, rpf in sorted(zip(rpfs_strengths, all_rpfs), reverse=True)]
+        return strength_sorted_rpfs[:n]
 
 
-def get_rank(player, formation):
-    return formation.index(player) + 1
+class Formation:
+    def __init__(self, players):
+        self.players = players
 
+    def __str__(self):
+        ranked_formation = self.get_ranked_formation()
+        output = f'[{str(ranked_formation[0][1])}] {ranked_formation[0][0]:<30}'
+        for rf in ranked_formation[1:]:
+            output += f'[{str(rf[1])}] {rf[0]:<30}'
 
-def get_double_rank(pair, formation):
-    ranked_formation = get_ranked_formation(formation)
-    pair = [player for player in ranked_formation if player[0] in pair]
-    return pair[0][1] + pair[1][1]
+        header = 'FORMATION:'
+        separator = 210 * '-'
 
+        return f'\n{separator}\n{header:^210}\n{separator}\n{output}\n{separator}'
 
-def get_double_strength(pair, players):
-    lr_strength = players[pair[0]]['strength']['left'] + players[pair[1]]['strength']['right']
-    rl_strength = players[pair[0]]['strength']['right'] + players[pair[1]]['strength']['left']
-    return lr_strength if lr_strength > rl_strength else rl_strength
+    ##########################################################################
+    # Combinatorics
+    ##########################################################################
 
+    def get_ranked_formation(self):
+        return [(name, rank) for name, rank in zip(self.players, range(1, 7))]
 
-def get_formation_strength(rpf, players):
-    return sum([get_double_strength(pair, players) for pair in rpf])
+    @staticmethod
+    def all_pairs(players):
+        if len(players) < 2:
+            yield []
+            return
+        if len(players) % 2 == 1:
+            # Handle odd length list
+            for i in range(len(players)):
+                for result in Formation.all_pairs(players[:i] + players[i + 1:]):
+                    yield result
+        else:
+            p1 = players[0]
+            for i in range(1, len(players)):
+                pair = (p1, players[i])
+                for rest in Formation.all_pairs(players[1:i] + players[i + 1:]):
+                    yield [pair] + rest
 
+    def get_paired_formations(self):
+        return list(self.all_pairs(self.players))
 
-def sort_by_sum(pairs, positions):
-    sums = [positions[p[0]] + positions[p[1]] for p in pairs]
-    return [(p[0], p[1], s) for s, p in sorted(zip(sums, pairs))]
+    def get_ranked_paired_formations(self, paired_formation):
 
+        # Two-leveled sorting of pairs
+        # 1. By the double rank according to the formation
+        # 2. By the minimum single rank for each pair (in case of equality of double rank)
+        min_single_ranks = [min(self.get_rank(pair[0]), self.get_rank(pair[1])) for pair in paired_formation]
+        double_ranks = [self.get_double_rank(pair) for pair in paired_formation]
+        ranked_paired_formation = [pair for _, _, pair in sorted(zip(double_ranks, min_single_ranks, paired_formation))]
+        double_ranks.sort()
 
-def print_players(header, players):
-    print()
-    print(header)
-    print(30 * '-')
-    for name, info in players.items():
-        print(f'{info["rank"]:>2}: {name}')
-
-
-def print_ranked_formation(formation):
-    ranked_formation = get_ranked_formation(formation)
-    output = f'[{str(ranked_formation[0][1])}] {ranked_formation[0][0]:<30}'
-    for rf in ranked_formation[1:]:
-        output += f'[{str(rf[1])}] {rf[0]:<30}'
-    print()
-    print('Formation:')
-    print(210 * '-')
-    print(output)
-    print(210 * '-')
-
-
-def print_ranked_paired_formation(rpf, players, formation=None):
-    total_strength = get_formation_strength(rpf, players)
-    if formation is not None:
-        output = [
-            f'[{get_rank(pair[0], formation)}] + [{get_rank(pair[1], formation)}]'
-            f' = [{get_double_rank(pair,formation):>2}]'
-            f' [strength = {get_double_strength(pair, players)}]'
-            for pair in rpf
-        ]
-
-        print(f'{output[0]:<40}{output[1]:<40}{output[2]:<40}'
-              f'   [total strength = {total_strength}]'
-              )
-    else:
-        output = []
-        for pair in rpf:
-            double_strength_string = f' [strength = {get_double_strength(pair, players)}]'
-            output.append(f'{pair[0]:>25} + {pair[1]:<25}{double_strength_string:<20}')
-
-        print(f'{output[0]:<70} || {output[1]:<70} || {output[2]:<70}'
-              f'   [total strength = {total_strength}]'
-              )
-
-
-def filter_ranked_paired_formations(rpf, players):
-    pass
-
-
-def main():
-    with open('players_info.json', 'r', encoding='utf-8') as f:
-        players = json.load(f)
-
-    print_players('List of players:', players)
-
-    # input_ranks = input('Please enter available players:\n')
-    input_ranks = "1 2 5 7 8 11"
-    available_ranks = [int(p.strip()) for p in input_ranks.split()]
-    available_players = {name: info for name, info in players.items() for rk in available_ranks if info['rank'] == rk}
-
-    # Validate input
-    if len(available_players) < 6:
-        RuntimeError('Not sufficient players selected!')
-
-    print_players('Available players:', available_players)
-
-    # Evaluate all possible formations of 6 players out of all available players
-    formations = get_all_formations(available_players.keys())
-
-    # Evaluate all paired formations from all possible formations
-    all_ranked_paired_formations = []
-    for formation in formations:
-        print_ranked_formation(formation)
-
-        # List of paired formations out of formations of 6 players (all possible pairs)
-        paired_formations = get_paired_formations(formation)
-
-        # List of all ranked paired formations:
-        # This includes swapped positions due to same double ranks
+        if double_ranks[0] == double_ranks[1]:
+            if double_ranks[1] == double_ranks[2]:
+                formation_variations = [
+                    [0, 1, 2],
+                    [0, 2, 1],
+                    [1, 0, 2],
+                    [2, 0, 1]
+                ]
+            else:
+                formation_variations = [
+                    [0, 1, 2],
+                    [1, 0, 2]
+                ]
+        else:
+            if double_ranks[1] == double_ranks[2]:
+                formation_variations = [
+                    [0, 1, 2],
+                    [0, 2, 1]
+                ]
+            else:
+                formation_variations = [
+                    [0, 1, 2]
+                ]
         ranked_paired_formations = []
-        for paired_formation in paired_formations:
-            ranked_paired_formations.extend(get_ranked_paired_formations(paired_formation, formation))
+        for i, j, k in formation_variations:
+            ranked_paired_formations.append(
+                [ranked_paired_formation[i], ranked_paired_formation[j], ranked_paired_formation[k]]
+            )
+        return ranked_paired_formations
 
-        for ranked_paired_formation in ranked_paired_formations:
-            print_ranked_paired_formation(ranked_paired_formation, players, formation)
+    def get_all_ranked_paired_formations(self):
+        all_ranked_paired_formations = []
+        for paired_formation in self.get_paired_formations():
+            all_ranked_paired_formations.extend(self.get_ranked_paired_formations(paired_formation))
+        return all_ranked_paired_formations
 
-        # Collect all ranked paired formations from all possible formations (more than 6 players available)
-        all_ranked_paired_formations.extend(ranked_paired_formations)
+    ##########################################################################
+    # Analysis functions
+    ##########################################################################
 
-    formation_strengths = [get_formation_strength(rpf, players) for rpf in all_ranked_paired_formations]
-    max_total_strength = max(formation_strengths)
-    max_total_strength_formations = [rpf for _, rpf in
-                                     sorted(zip(formation_strengths, all_ranked_paired_formations), reverse=True)]
-    print('\n\n')
-    print(f'Max. formation strength: {max_total_strength}')
-    for rpf in max_total_strength_formations[:min([len(max_total_strength_formations), 20])]:
-        print_ranked_paired_formation(rpf, players)
+    def get_rank(self, player):
+        return self.players.index(player) + 1 if player in self.players else None
 
+    def get_double_rank(self, pair):
+        """
+
+        :param pair: A 2-tuple holding player names
+        :return: The sum of ranks according to the given formation
+        """
+        ranked_formation = self.get_ranked_formation()
+        pair = [player for player in ranked_formation if player[0] in pair]
+        return pair[0][1] + pair[1][1]
 
 
 if __name__ == '__main__':
-    main()
+    # Load players info
+    dp = DoublePower('players_info.json')
 
+    # Give an overview over possible formations and respective paired ranked formations
+    dp.print_formations_info()
 
-
+    dp.print_strongest_formations(20)
